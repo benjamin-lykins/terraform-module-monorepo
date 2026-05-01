@@ -1,4 +1,4 @@
 output "name" {
-  description = "The generated pet name."
+  description = "The generated random pet name string."
   value       = random_pet.this.id
 }
