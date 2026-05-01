@@ -1,4 +1,4 @@
 output "result" {
-  description = "Shuffled list result."
+  description = "The random shuffled list result."
   value       = random_shuffle.this.result
 }
