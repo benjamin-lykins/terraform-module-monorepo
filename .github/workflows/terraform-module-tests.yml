@@ -24,56 +24,36 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Generate filters file
+        shell: bash
+        run: |
+          find modules -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | \
+          while IFS= read -r m; do
+            printf '%s:\n  - "modules/%s/**"\n' "$m" "$m"
+          done > /tmp/module-filters.yml
+
       - name: Detect changes
         id: filter
         uses: dorny/paths-filter@v4
         with:
-          filters: |
-            random_pet_name:
-              - "modules/random_pet_name/**"
-            random_password:
-              - "modules/random_password/**"
-            random_integer:
-              - "modules/random_integer/**"
-            random_uuid:
-              - "modules/random_uuid/**"
-            random_shuffle:
-              - "modules/random_shuffle/**"
+          filters: /tmp/module-filters.yml
 
       - name: Build matrix from changed modules
         id: build-matrix
         shell: bash
         run: |
-          modules=()
-
-          if [[ "${{ steps.filter.outputs.random_pet_name }}" == "true" ]]; then
-            modules+=("random_pet_name")
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            modules_json=$(find modules -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | jq -R . | jq -cs .)
+          else
+            modules_json='${{ steps.filter.outputs.changes }}'
           fi
 
-          if [[ "${{ steps.filter.outputs.random_password }}" == "true" ]]; then
-            modules+=("random_password")
-          fi
-
-          if [[ "${{ steps.filter.outputs.random_integer }}" == "true" ]]; then
-            modules+=("random_integer")
-          fi
-
-          if [[ "${{ steps.filter.outputs.random_uuid }}" == "true" ]]; then
-            modules+=("random_uuid")
-          fi
-
-          if [[ "${{ steps.filter.outputs.random_shuffle }}" == "true" ]]; then
-            modules+=("random_shuffle")
-          fi
-
-          if [[ ${#modules[@]} -eq 0 ]]; then
-            echo 'modules_json=[]' >> "$GITHUB_OUTPUT"
+          if [[ "$modules_json" == "[]" ]]; then
             echo 'has_changes=false' >> "$GITHUB_OUTPUT"
           else
-            printf -v modules_json '%s\n' "$(printf '%s\n' "${modules[@]}" | jq -R . | jq -cs .)"
-            echo "modules_json=${modules_json}" >> "$GITHUB_OUTPUT"
             echo 'has_changes=true' >> "$GITHUB_OUTPUT"
           fi
+          echo "modules_json=${modules_json}" >> "$GITHUB_OUTPUT"
 
   test-modules:
     name: Test ${{ matrix.module }}
