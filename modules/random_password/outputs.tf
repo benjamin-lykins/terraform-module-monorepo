@@ -1,5 +1,5 @@
 output "password" {
-  description = "Generated password."
+  description = "The generated password."
   value       = random_password.this.result
   sensitive   = true
 }
