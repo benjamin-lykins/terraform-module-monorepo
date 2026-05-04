@@ -24,20 +24,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Generate filters file
-        shell: bash
-        run: |
-          find modules -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | \
-          while IFS= read -r m; do
-            printf '%s:\n  - "modules/%s/**"\n' "$m" "$m"
-          done > /tmp/module-filters.yml
-
-      - name: Detect changes
-        id: filter
-        uses: dorny/paths-filter@v4
-        with:
-          filters: /tmp/module-filters.yml
-
       - name: Build matrix from changed modules
         id: build-matrix
         shell: bash
@@ -45,7 +31,21 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             modules_json=$(find modules -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | jq -R . | jq -cs .)
           else
-            modules_json='${{ steps.filter.outputs.changes }}'
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              base_sha="${{ github.event.pull_request.base.sha }}"
+              head_sha="${{ github.event.pull_request.head.sha }}"
+            else
+              base_sha="${{ github.event.before }}"
+              head_sha="${{ github.sha }}"
+            fi
+
+            # On first push to a branch, GitHub sets event.before to all zeros.
+            if [[ "$base_sha" == "0000000000000000000000000000000000000000" ]]; then
+              modules_json=$(find modules -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | jq -R . | jq -cs .)
+            else
+              modules_json=$(git diff --name-only "$base_sha" "$head_sha" | \
+                awk -F/ '/^modules\/[^/]+\// { print $2 }' | sort -u | jq -R . | jq -cs .)
+            fi
           fi
 
           if [[ "$modules_json" == "[]" ]]; then
